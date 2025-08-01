@@ -1,0 +1,130 @@
+<!DOCTYPE html>
+<html lang="id">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>KPPN Painan - Hitung UP</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+  </head>
+  <body class="bg-gray-100 h-screen flex items-center justify-center">
+    <div class="w-full max-w-md bg-white shadow-lg rounded-lg p-4">
+      <div class="bg-purple-300 text-blue-700 text-center text-2xl font-bold py-3 rounded">
+        KPPN Painan
+      </div>
+
+      <div class="flex justify-between items-center mt-2">
+        <h2 class="text-left text-xl font-bold text-gray-700">Hitung UP</h2>
+        <h2 id="hasil" class="text-right text-2xl font-bold"></h2>
+      </div>
+
+      <!-- Form Input -->
+      <label class="block mt-3 font-medium">Kode Satker</label>
+      <input type="text" id="kode_satker" class="w-full border p-2 rounded bg-blue-100" />
+
+      <label class="block mt-3 font-medium">Nomor SPP</label>
+      <input type="text" id="nomor_spp" class="w-full border p-2 rounded bg-green-100" />
+
+      <label class="block mt-3 font-medium">Jumlah Uang Persediaan (UP)</label>
+      <input type="text" id="up" class="w-full border p-2 rounded text-right"
+             placeholder="Masukkan UP" oninput="formatNumber(this)" />
+
+      <label class="block mt-3 font-medium">Jumlah GUP yang akan diajukan</label>
+      <input type="text" id="gup" class="w-full border p-2 rounded text-right"
+             placeholder="Masukkan GUP" oninput="formatNumber(this)" />
+
+      <label class="block mt-3 font-medium">Pengajuan Sebelumnya</label>
+      <input type="date" id="tgl_pengajuan" class="w-full border p-2 rounded" onchange="hitungHariGUP()" />
+
+      <label class="block mt-3 font-medium">Rencana Pengajuan Sekarang</label>
+      <input type="date" id="tgl_hari_ini" class="w-full border p-2 rounded" onchange="hitungHariGUP()" />
+
+      <input type="hidden" id="hari_sebulan">
+      <input type="hidden" id="hari_gup">
+
+      <button class="w-full bg-green-500 text-white py-2 mt-5 rounded-lg hover:bg-green-700"
+              onclick="hitungHasil()">
+        Hitung & Simpan
+      </button>
+    </div>
+
+    <script>
+      const WEBHOOK_URL = 'https://script.google.com/macros/s/AKfycbwZoy8x2f2WAoqVR67FdnqTP7RsmB9cjkk5EFRMIMKUIdhY0d5Mu584IDXBwGYOQMG6Mg/exec';
+
+      function formatNumber(input) {
+        let v = input.value.replace(/[^\d]/g, '');
+        input.value = v ? Number(v).toLocaleString('id-ID') : '';
+      }
+
+      function hitungHariGUP() {
+        const t0 = new Date(document.getElementById('tgl_pengajuan').value);
+        const t1 = new Date(document.getElementById('tgl_hari_ini').value);
+        if (!isNaN(t0)) {
+          let daysInMonth = new Date(t0.getFullYear(), t0.getMonth() + 1, 0).getDate();
+          document.getElementById('hari_sebulan').value = daysInMonth;
+        }
+        if (!isNaN(t0) && !isNaN(t1)) {
+          let diffDays = Math.floor((t1 - t0) / (1000 * 60 * 60 * 24));
+          document.getElementById('hari_gup').value = diffDays;
+        }
+      }
+
+      function hitungHasil() {
+        const up = parseFloat((document.getElementById('up').value || '').replace(/[^\d]/g, '')) || 0;
+        const gup = parseFloat((document.getElementById('gup').value || '').replace(/[^\d]/g, '')) || 0;
+        const hm = parseFloat(document.getElementById('hari_sebulan').value) || 0;
+        const hg = parseFloat(document.getElementById('hari_gup').value) || 0;
+        const elH = document.getElementById('hasil');
+
+        if (!up || !gup || !hm || hg <= 0) {
+          elH.innerText = 'Isi semua nilai!';
+          elH.className = 'text-red-500 text-2xl font-bold';
+          return;
+        }
+
+        if (gup < 0.5 * up) {
+          alert('GUP tidak boleh kurang dari 50% dari UP.');
+          return;
+        }
+        if (gup > up) {
+          alert('GUP tidak boleh lebih besar dari UP.');
+          return;
+        }
+
+        const pct = ((gup / up) * (hm / hg)) * 100;
+        const txt = pct.toFixed(2) + '%';
+        elH.innerText = txt;
+        elH.className = pct >= 100
+          ? 'text-green-500 text-2xl font-bold'
+          : 'text-red-500 text-2xl font-bold';
+
+        const payload = {
+          kode_satker: document.getElementById('kode_satker').value,
+          nomor_spp: document.getElementById('nomor_spp').value,
+          up: document.getElementById('up').value,
+          gup: document.getElementById('gup').value,
+          tgl_pengajuan: document.getElementById('tgl_pengajuan').value,
+          tgl_sekarang: document.getElementById('tgl_hari_ini').value,
+          hasil_persen: txt
+        };
+
+        fetch(WEBHOOK_URL, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload)
+        })
+        .then(async res => {
+          const response = await res.json();
+          if (res.ok) {
+            alert(response.message || 'Data berhasil disimpan.');
+          } else {
+            alert('Gagal menyimpan:\n' + (response.message || 'Unknown error'));
+          }
+        })
+        .catch(err => {
+          alert('Gagal kirim (Network Error):\n' + err.message);
+          console.error(err);
+        });
+      }
+    </script>
+  </body>
+</html>
